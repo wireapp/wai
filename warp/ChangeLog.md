@@ -8,6 +8,8 @@
     * Reworked request lines (`CRLF`) parsing to not unnecessarily copy bytestrings.
 * Using http2 v5.1.0.
 * `fourmolu` is used as an official formatter.
+* Respond with `Connection: close` header if connection is to be closed after a request.
+   [#958](https://github.com/yesodweb/wai/pull/958)
 
 ## 3.3.31
 
