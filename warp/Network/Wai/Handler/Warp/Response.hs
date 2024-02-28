@@ -121,26 +121,25 @@ sendResponse
     -> IO Bool
     -- ^ Returing True if the connection is persistent.
 sendResponse settings conn ii th req reqidxhdr src response = do
-    hs <- addAltSvc settings <$> addServerAndDate hs0
-    if hasBody s
-        then do
-            -- The response to HEAD does not have body.
-            -- But to handle the conditional requests defined RFC 7232 and
-            -- to generate appropriate content-length, content-range,
-            -- and status, the response to HEAD is processed here.
-            --
-            -- See definition of rsp below for proper body stripping.
-            (ms, mlen) <- sendRsp conn ii th ver s hs rspidxhdr maxRspBufSize method rsp
-            case ms of
-                Nothing -> return ()
-                Just realStatus -> logger req realStatus mlen
-            T.tickle th
-            return ret
-        else do
-            _ <- sendRsp conn ii th ver s hs rspidxhdr maxRspBufSize method RspNoBody
-            logger req s Nothing
-            T.tickle th
-            return isPersist
+    hs <- addConnection . addAltSvc settings <$> addServerAndDate hs0
+    if hasBody s then do
+        -- The response to HEAD does not have body.
+        -- But to handle the conditional requests defined RFC 7232 and
+        -- to generate appropriate content-length, content-range,
+        -- and status, the response to HEAD is processed here.
+        --
+        -- See definition of rsp below for proper body stripping.
+        (ms, mlen) <- sendRsp conn ii th ver s hs rspidxhdr maxRspBufSize method rsp
+        case ms of
+            Nothing         -> return ()
+            Just realStatus -> logger req realStatus mlen
+        T.tickle th
+        return ret
+      else do
+        _ <- sendRsp conn ii th ver s hs rspidxhdr maxRspBufSize method RspNoBody
+        logger req s Nothing
+        T.tickle th
+        return isPersist
   where
     defServer = settingsServerName settings
     logger = settingsLogger settings
@@ -149,6 +148,9 @@ sendResponse settings conn ii th req reqidxhdr src response = do
     s = responseStatus response
     hs0 = sanitizeHeaders $ responseHeaders response
     rspidxhdr = indexResponseHeader hs0
+    addConnection hs = if (hasBody s && not ret) || (not (hasBody s) && not isPersist)
+                       then (H.hConnection, "close") : hs
+                       else hs
     getdate = getDate ii
     addServerAndDate = addDate getdate rspidxhdr . addServer defServer rspidxhdr
     (isPersist, isChunked0) = infoFromRequest req reqidxhdr
